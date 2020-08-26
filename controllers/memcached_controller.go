@@ -21,7 +21,9 @@ import (
 	"encoding/json"
 	"github.com/example-inc/memcached-operator/resources"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/go-logr/logr"
@@ -29,7 +31,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	cachev1 "github.com/example-inc/memcached-operator/api/v1"
+	appv1 "github.com/example-inc/memcached-operator/api/v1"
 )
 
 // MemcachedReconciler reconciles a Memcached object
@@ -47,7 +49,7 @@ func (r *MemcachedReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("memcached", req.NamespacedName)
 
 	// your logic here
-	instance := &cachev1.Memcached{}
+	instance := &appv1.Memcached{}
 	err := r.Client.Get(context.TODO(), req.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -92,11 +94,39 @@ func (r *MemcachedReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return reconcile.Result{}, nil
 	}
 
+	oldSpec := appv1.MemcachedSpec{}
+	if err := json.Unmarshal([]byte(instance.Annotations["spec"]), &oldSpec); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Update resources
+	if !reflect.DeepEqual(instance.Spec, oldSpec) {
+		newDeploy := resources.NewDeploy(instance)
+		oldDeploy := &appsv1.Deployment{}
+		if err := r.Client.Get(context.TODO(), req.NamespacedName, oldDeploy); err != nil {
+			return reconcile.Result{}, err
+		}
+		oldDeploy.Spec = newDeploy.Spec
+		if err := r.Client.Update(context.TODO(), oldDeploy); err != nil {
+			return reconcile.Result{}, err
+		}
+
+		newService := resources.NewService(instance)
+		oldService := &corev1.Service{}
+		if err := r.Client.Get(context.TODO(), req.NamespacedName, oldService); err != nil {
+			return reconcile.Result{}, err
+		}
+		oldService.Spec = newService.Spec
+		if err := r.Client.Update(context.TODO(), oldService); err != nil {
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{}, nil
+	}
 	return ctrl.Result{}, nil
 }
 
 func (r *MemcachedReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&cachev1.Memcached{}).
+		For(&appv1.Memcached{}).
 		Complete(r)
 }
