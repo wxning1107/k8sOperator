@@ -42,5 +42,24 @@ func NewDeploy(app *appv1.Memcached) *appsv1.Deployment {
 			Selector: labelSelector,
 		},
 	}
+}
 
+func newContainers(app *appv1.Memcached) []corev1.Container {
+	containerPorts := []corev1.ContainerPort{}
+	for _, svcPort := range app.Spec.Ports {
+		cPort := corev1.ContainerPort{}
+		cPort.ContainerPort = svcPort.TargetPort.IntVal
+		containerPorts = append(containerPorts, cPort)
+	}
+
+	return []corev1.Container{
+		{
+			Name:            app.Name,
+			Image:           app.Spec.Image,
+			Resources:       app.Spec.Resources,
+			Ports:           containerPorts,
+			ImagePullPolicy: corev1.PullIfNotPresent,
+			Env:             app.Spec.Envs,
+		},
+	}
 }
