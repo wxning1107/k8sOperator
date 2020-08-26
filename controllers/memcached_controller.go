@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"github.com/example-inc/memcached-operator/resources"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 
@@ -27,8 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	cachev1 "github.com/example-inc/memcached-operator/api/v1"
-	apiv1 "k8s.io/api/core/v1"
-
 )
 
 // MemcachedReconciler reconciles a Memcached object
@@ -60,8 +59,19 @@ func (r *MemcachedReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	deploy := &appsv1.Deployment{}
-	if err := r.Client.Get(context.TODO(), req.NamespacedName, deploy); err != nil && errors.IsNotFound(err){
-		resources.new
+	if err := r.Client.Get(context.TODO(), req.NamespacedName, deploy); err != nil && errors.IsNotFound(err) {
+		// create deploy
+		deploy := resources.NewDeploy(instance)
+		if err := r.Client.Create(context.TODO(), deploy); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		// create service
+		service := resources.NewService(instance)
+		if err := r.Client.Create(context.TODO(), service); err != nil {
+			return ctrl.Result{}, err
+		}
+
 	}
 
 	return ctrl.Result{}, nil
