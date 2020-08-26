@@ -18,9 +18,11 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/example-inc/memcached-operator/resources"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -60,18 +62,34 @@ func (r *MemcachedReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	deploy := &appsv1.Deployment{}
 	if err := r.Client.Get(context.TODO(), req.NamespacedName, deploy); err != nil && errors.IsNotFound(err) {
-		// create deploy
+		// Create deploy
 		deploy := resources.NewDeploy(instance)
 		if err := r.Client.Create(context.TODO(), deploy); err != nil {
 			return ctrl.Result{}, err
 		}
 
-		// create service
+		// Create service
 		service := resources.NewService(instance)
 		if err := r.Client.Create(context.TODO(), service); err != nil {
 			return ctrl.Result{}, err
 		}
 
+		// Correlate annotations
+		data, err := json.Marshal(instance.Spec)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if instance.Annotations != nil {
+			instance.Annotations["spec"] = string(data)
+		} else {
+			instance.Annotations = map[string]string{"spec": string(data)}
+		}
+
+		if err := r.Client.Update(context.TODO(), instance); err != nil {
+			return reconcile.Result{}, err
+		}
+
+		return reconcile.Result{}, nil
 	}
 
 	return ctrl.Result{}, nil
